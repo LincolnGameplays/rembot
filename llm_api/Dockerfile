@@ -2,8 +2,13 @@ FROM python:3.10-slim-buster
 
 WORKDIR /app
 
-# Install build dependencies for llama-cpp-python
-RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     cmake     libssl-dev     && rm -rf /var/lib/apt/lists/*
+# Install build dependencies for llama-cpp-python, including git
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install llama-cpp-python with server extras
 # Use --no-cache-dir to save space

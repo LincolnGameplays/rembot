@@ -1,0 +1,5 @@
+asyncpg
+aiohttp
+chromadb
+sentence-transformers
+pydantic
