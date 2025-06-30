@@ -1,0 +1,24 @@
+# Ignore environment variables file
+.env
+
+# Ignore downloaded LLM models
+models/
+
+# Ignore Python cache and virtual environments
+__pycache__/
+*.pyc
+.venv/
+virtualenv/
+venv/
+
+# Ignore Docker-related files that are not part of the source
+*.swp
+*.swo
+
+# Ignore specific OS generated files
+.DS_Store
+Thumbs.db
+
+# Ignore database data volumes
+db_data/
+chromadb_data/

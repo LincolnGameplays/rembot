@@ -1,0 +1,7 @@
+python-telegram-bot==20.8
+psycopg2-binary
+requests
+langdetect
+textblob
+stripe
+vaderSentiment

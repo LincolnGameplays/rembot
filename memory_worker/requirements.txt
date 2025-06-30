@@ -1,0 +1,4 @@
+asyncpg
+requests
+sentence-transformers
+chromadb

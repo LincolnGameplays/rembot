@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # Only for local debugging, remove in production if not needed externally
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  chromadb:
+    image: chromadb/chroma:latest
+    restart: always
+    volumes:
+      - chromadb_data:/chroma/.chroma
+    ports:
+      - "8001:8000" # ChromaDB default port
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  llm_api:
+    build:
+      context: ./llm_api
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      MODEL_PATH: /app/models/${LLM_MODEL_FILENAME}
+      N_THREADS: ${LLM_N_THREADS} # Matches VM vCPU count
+      N_CTX: ${LLM_N_CTX} # Context window size
+    volumes:
+      - ./models:/app/models # Mount models directory
+    ports:
+      - "8000:8000" # FastAPI default port
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PRODUCT_PRICE_ID: ${STRIPE_PRODUCT_PRICE_ID}
+      LLM_API_URL: http://llm_api:8000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: 8000
+    depends_on:
+      llm_api:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config # For any shared config or persistent data
+
+  memory_worker:
+    build:
+      context: ./memory_worker
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      LLM_API_URL: http://llm_api:8000
+      CHROMADB_HOST: chromadb
+      CHROMADB_PORT: 8000
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME}
+    depends_on:
+      llm_api:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config
+
+volumes:
+  db_data:
+  chromadb_data:
