@@ -2,10 +2,10 @@ import os
 import logging
 import asyncio
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, PreCheckoutQueryHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 
 from app import config, handlers
-from app.services import db_service, chroma_service, stripe_service
+from app.services import db_service, chroma_service
 
 # --- Logging Setup --- #
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -34,7 +34,7 @@ async def post_init(app: Application):
     """Initializes all services after the application has started."""
     await db_service.init_db(app)
     chroma_service.init_chroma(app)
-    stripe_service.init_stripe()
+    # No Stripe init needed
     # Start the background task
     app.create_task(proactive_message_task(app))
     logger.info("All services initialized and background task started.")
@@ -63,9 +63,9 @@ def main() -> None:
     # Register handlers
     application.add_handler(CommandHandler("start", handlers.start_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_message))
-    application.add_handler(PreCheckoutQueryHandler(stripe_service.pre_checkout_callback))
-    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, stripe_service.successful_payment_callback))
+    # Removed Stripe payment handlers
     application.add_handler(CallbackQueryHandler(handlers.handle_feedback_callback, pattern=r'^feedback_'))
+    application.add_handler(CommandHandler("admin_activate", handlers.admin_activate_command))
     application.add_error_handler(handlers.error_handler)
 
     logger.info("Bot polling started...")

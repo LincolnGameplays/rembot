@@ -24,14 +24,15 @@ async def init_db(app):
                     subscription_status TEXT DEFAULT 'trial',
                     trial_start_time TIMESTAMP,
                     trial_end_time TIMESTAMP,
-                    current_language TEXT DEFAULT 'en',
+                    current_language TEXT DEFAULT 'pt', -- Default to Portuguese
                     affection_level INTEGER DEFAULT 50,
                     trust_level INTEGER DEFAULT 50,
                     happiness_level INTEGER DEFAULT 50,
                     mood_state TEXT DEFAULT 'neutral',
                     last_interaction_timestamp TIMESTAMP DEFAULT NOW(),
-                    trial_warning_sent BOOLEAN DEFAULT FALSE,
-                    last_summarized_timestamp TIMESTAMP DEFAULT NOW()
+                    trial_warning_sent TEXT DEFAULT 'none',
+                    last_summarized_timestamp TIMESTAMP DEFAULT NOW(),
+                    subscription_activated_message_sent BOOLEAN DEFAULT FALSE
                 );
                 CREATE TABLE IF NOT EXISTS conversations (
                     id SERIAL PRIMARY KEY,
@@ -80,14 +81,21 @@ async def update_user_interaction_time(context, telegram_id: int):
     async with pool.acquire() as conn:
         await conn.execute("UPDATE users SET last_interaction_timestamp = NOW() WHERE telegram_id = $1", telegram_id)
 
-async def update_user_subscription_status(context, telegram_id: int, status: str, stripe_customer_id: str = None):
+async def update_user_subscription_status(context, telegram_id: int, status: str):
     pool = context.bot_data['db_pool']
     async with pool.acquire() as conn:
-        if stripe_customer_id:
-            await conn.execute("UPDATE users SET subscription_status = $1, stripe_customer_id = $2 WHERE telegram_id = $3", status, stripe_customer_id, telegram_id)
+        # Reset the message sent flag if status changes to active
+        if status == 'active':
+            await conn.execute("UPDATE users SET subscription_status = $1, subscription_activated_message_sent = FALSE WHERE telegram_id = $2", status, telegram_id)
         else:
             await conn.execute("UPDATE users SET subscription_status = $1 WHERE telegram_id = $2", status, telegram_id)
         logger.info(f"User {telegram_id} subscription status updated to {status}")
+        return True # Indicate success
+
+async def set_subscription_activated_message_sent(context, telegram_id: int):
+    pool = context.bot_data['db_pool']
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET subscription_activated_message_sent = TRUE WHERE telegram_id = $1", telegram_id)
 
 async def save_conversation(context, user_id: int, speaker: str, message_text: str):
     pool = context.bot_data['db_pool']
@@ -109,10 +117,10 @@ async def get_recent_conversations(context, user_id: int, limit: int = 10):
         )
         return conversations[::-1] # Return in chronological order
 
-async def set_trial_warning_sent(context, telegram_id: int):
+async def set_trial_warning_sent(context, telegram_id: int, warning_key: str):
     pool = context.bot_data['db_pool']
     async with pool.acquire() as conn:
-        await conn.execute("UPDATE users SET trial_warning_sent = TRUE WHERE telegram_id = $1", telegram_id)
+        await conn.execute("UPDATE users SET trial_warning_sent = $1 WHERE telegram_id = $2", warning_key, telegram_id)
 
 async def get_users_for_proactive_message(context):
     pool = context.bot_data['db_pool']
